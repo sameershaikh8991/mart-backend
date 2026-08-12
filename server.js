@@ -75,17 +75,21 @@ app.post("/api/items/:mobile", async (req, res) => {
 });
 
 app.patch("/api/items/:mobile/:id", async (req, res) => {
+  console.log("PATCH /api/items/:mobile/:id called with params:", req.params, "and body:", req.body);
   try {
-    const { qty, price, checked, category } = req.body;
+    const { qty, price, checked, category, skipped, note } = req.body;
+
     const rows = await sql`
       UPDATE items SET
         qty = COALESCE(${qty}, qty),
         price = COALESCE(${price}, price),
         checked = COALESCE(${checked}, checked),
         category = COALESCE(${category}, category),
+        skipped = COALESCE(${skipped}, skipped),
+        note = COALESCE(${note}, note),
         updated_at = now()
       WHERE id = ${req.params.id} AND mobile = ${req.params.mobile}
-      RETURNING id, name, category, qty, unit, price, checked
+      RETURNING id, name, category, qty, unit, price, checked, skipped, note
     `;
     if (!rows[0]) return res.status(404).json({ error: "item not found" });
     res.json(rows[0]);
@@ -94,6 +98,7 @@ app.patch("/api/items/:mobile/:id", async (req, res) => {
     res.status(500).json({ error: "could not update item" });
   }
 });
+
 
 app.delete("/api/items/:mobile/:id", async (req, res) => {
   try {
