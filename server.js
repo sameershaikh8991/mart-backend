@@ -10,8 +10,13 @@
 //   POST /api/login          { name, mobile }              -> creates/returns user
 //   GET  /api/items/:mobile                                -> list all items for a user
 //   POST /api/items/:mobile   { name, category, qty, unit, price } -> add or increment item
-//   PATCH /api/items/:mobile/:id  { qty?, price?, checked?, category? } -> update one item
+//   PATCH /api/items/:mobile/:id  { qty?, price?, checked?, category?, skipped?, note? } -> update one item
 //   DELETE /api/items/:mobile/:id -> remove one item
+//   POST /api/items/:mobile/reset-trip -> clears checked + skipped + note for ALL items (start a new shopping trip)
+//
+// MIGRATION NEEDED (run once in Neon SQL editor before deploying this version):
+//   ALTER TABLE items ADD COLUMN IF NOT EXISTS skipped boolean NOT NULL DEFAULT false;
+//   ALTER TABLE items ADD COLUMN IF NOT EXISTS note text;
 
 import express from "express";
 import cors from "cors";
@@ -26,6 +31,7 @@ const sql = neon(process.env.DATABASE_URL);
 
 // ---- users ----
 app.post("/api/login", async (req, res) => {
+  log("POST /api/login called with body:", req.body);
   try {
     const { name, mobile } = req.body;
     if (!name || !mobile) return res.status(400).json({ error: "name and mobile are required" });
@@ -43,9 +49,10 @@ app.post("/api/login", async (req, res) => {
 
 // ---- items ----
 app.get("/api/items/:mobile", async (req, res) => {
+  log("GET /api/items/:mobile called with params:", req.params);
   try {
     const rows = await sql`
-      SELECT id, name, category, qty, unit, price, checked
+      SELECT id, name, category, qty, unit, price, checked, skipped, note
       FROM items WHERE mobile = ${req.params.mobile}
       ORDER BY created_at ASC
     `;
@@ -57,6 +64,7 @@ app.get("/api/items/:mobile", async (req, res) => {
 });
 
 app.post("/api/items/:mobile", async (req, res) => {
+  log("POST /api/items/:mobile called with body:", req.body);
   try {
     const { name, category = "Kitchen", qty = 1, unit = "packet", price = null } = req.body;
     if (!name) return res.status(400).json({ error: "name is required" });
@@ -65,7 +73,7 @@ app.post("/api/items/:mobile", async (req, res) => {
       VALUES (${req.params.mobile}, ${name}, ${category}, ${qty}, ${unit}, ${price})
       ON CONFLICT (mobile, LOWER(name))
       DO UPDATE SET qty = items.qty + EXCLUDED.qty, updated_at = now()
-      RETURNING id, name, category, qty, unit, price, checked
+      RETURNING id, name, category, qty, unit, price, checked, skipped, note
     `;
     res.json(rows[0]);
   } catch (e) {
@@ -74,33 +82,63 @@ app.post("/api/items/:mobile", async (req, res) => {
   }
 });
 
+
 app.patch("/api/items/:mobile/:id", async (req, res) => {
-  console.log("PATCH /api/items/:mobile/:id called with params:", req.params, "and body:", req.body);
+  console.log("🔥🔥 PATCH ROUTE HIT");
+  console.log("PARAMS:", req.params);
+  console.log("BODY:", req.body);
+
   try {
     const { qty, price, checked, category, skipped, note } = req.body;
+
+    console.log("🔥 SKIPPED VALUE:", skipped);
 
     const rows = await sql`
       UPDATE items SET
         qty = COALESCE(${qty}, qty),
         price = COALESCE(${price}, price),
         checked = COALESCE(${checked}, checked),
-        category = COALESCE(${category}, category),
         skipped = COALESCE(${skipped}, skipped),
         note = COALESCE(${note}, note),
+        category = COALESCE(${category}, category),
         updated_at = now()
-      WHERE id = ${req.params.id} AND mobile = ${req.params.mobile}
-      RETURNING id, name, category, qty, unit, price, checked, skipped, note
+      WHERE id = ${req.params.id}
+        AND mobile = ${req.params.mobile}
+      RETURNING *
     `;
-    if (!rows[0]) return res.status(404).json({ error: "item not found" });
+
+    console.log("🔥 UPDATED ROW:", rows[0]);
+
+    if (!rows[0]) {
+      return res.status(404).json({ error: "item not found" });
+    }
+
     res.json(rows[0]);
+
   } catch (e) {
-    console.error(e);
+    console.error("🔥 PATCH ERROR:", e);
     res.status(500).json({ error: "could not update item" });
   }
 });
 
+// Reset all items for a new shopping trip: clears checked + skipped + note
+app.post("/api/items/:mobile/reset-trip", async (req, res) => {
+  log("POST /api/items/:mobile/reset-trip called with params:", req.params);
+  try {
+    const rows = await sql`
+      UPDATE items SET checked = false, skipped = false, note = NULL, updated_at = now()
+      WHERE mobile = ${req.params.mobile}
+      RETURNING id, name, category, qty, unit, price, checked, skipped, note
+    `;
+    res.json(rows);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "could not reset trip" });
+  }
+});
 
 app.delete("/api/items/:mobile/:id", async (req, res) => {
+  log("DELETE /api/items/:mobile/:id called with params:", req.params);
   try {
     await sql`DELETE FROM items WHERE id = ${req.params.id} AND mobile = ${req.params.mobile}`;
     res.json({ ok: true });
