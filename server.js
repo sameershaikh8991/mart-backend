@@ -122,7 +122,7 @@ app.patch("/api/items/:mobile/:id", async (req, res) => {
 app.post("/api/items/:mobile/reset-trip", async (req, res) => {
   try {
     const rows = await sql`
-      UPDATE items SET checked = false, skipped = false, note = NULL,qty =0,price = "", updated_at = now()
+      UPDATE items SET checked = false, skipped = false, note = NULL,qty =0,price = NULL, updated_at = now()
       WHERE mobile = ${req.params.mobile}
       RETURNING id, name, category, qty, unit, price, checked, skipped, note
     `;
