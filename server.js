@@ -1,4 +1,4 @@
-\// D-Mart list backend — Express + Neon Postgres (serverless driver)
+// D-Mart list backend — Express + Neon Postgres (serverless driver)
 //
 // Setup:
 //   1. npm install
