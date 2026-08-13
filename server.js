@@ -31,7 +31,6 @@ const sql = neon(process.env.DATABASE_URL);
 
 // ---- users ----
 app.post("/api/login", async (req, res) => {
-  log("POST /api/login called with body:", req.body);
   try {
     const { name, mobile } = req.body;
     if (!name || !mobile) return res.status(400).json({ error: "name and mobile are required" });
@@ -49,7 +48,6 @@ app.post("/api/login", async (req, res) => {
 
 // ---- items ----
 app.get("/api/items/:mobile", async (req, res) => {
-  log("GET /api/items/:mobile called with params:", req.params);
   try {
     const rows = await sql`
       SELECT id, name, category, qty, unit, price, checked, skipped, note
@@ -64,7 +62,6 @@ app.get("/api/items/:mobile", async (req, res) => {
 });
 
 app.post("/api/items/:mobile", async (req, res) => {
-  log("POST /api/items/:mobile called with body:", req.body);
   try {
     const { name, category = "Kitchen", qty = 1, unit = "packet", price = null } = req.body;
     if (!name) return res.status(400).json({ error: "name is required" });
@@ -123,7 +120,6 @@ app.patch("/api/items/:mobile/:id", async (req, res) => {
 
 // Reset all items for a new shopping trip: clears checked + skipped + note
 app.post("/api/items/:mobile/reset-trip", async (req, res) => {
-  log("POST /api/items/:mobile/reset-trip called with params:", req.params);
   try {
     const rows = await sql`
       UPDATE items SET checked = false, skipped = false, note = NULL,qty =0,price = "", updated_at = now()
@@ -138,7 +134,6 @@ app.post("/api/items/:mobile/reset-trip", async (req, res) => {
 });
 
 app.delete("/api/items/:mobile/:id", async (req, res) => {
-  log("DELETE /api/items/:mobile/:id called with params:", req.params);
   try {
     await sql`DELETE FROM items WHERE id = ${req.params.id} AND mobile = ${req.params.mobile}`;
     res.json({ ok: true });
